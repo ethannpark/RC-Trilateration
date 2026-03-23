@@ -3,7 +3,10 @@ import cv2
 
 app = Flask(__name__)
 
-camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+#camera = cv2.VideoCapture(0, cv2.CAP_DSHOW) is a windows specific setup that uses its OS to create
+#a reliable connection between the camera and PC. The second argument cannot be used on the pi
+
+camera = cv2.VideoCapture(0)
 camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
@@ -73,5 +76,4 @@ def video_feed():
     )
 
 if __name__ == "__main__":
-    #IP 0.0.0.0 allows any device in the network to access the website
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=5000, debug=False)
