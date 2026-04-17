@@ -1,0 +1,1 @@
+Requires use of pyserial
