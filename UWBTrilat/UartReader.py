@@ -28,39 +28,31 @@ smoothing_alpha = .35
 
 def trilaterate3D_least_squares(distances):
     # distances = [(x, y, z, r), ...]
-    
     p1 = np.array(distances[0][:3])
     r1 = distances[0][3]
-    
     A = []
     b = []
-    
+
     for d in distances[1:]:
         pi = np.array(d[:3])
         ri = d[3]
-        
         A.append(2 * (pi - p1))
-        
         b.append(
             r1**2 - ri**2 +
             np.dot(pi, pi) -
             np.dot(p1, p1)
         )
-    
+
     A = np.array(A)
     b = np.array(b)
-    
     # Solve least squares
     x, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
-    
     return x
     
 def trilaterate2D_least_squares(distances):
     # distances = [(x, y, r), ...]
-    
     p1 = np.array(distances[0][:2])
     r1 = distances[0][2]
-    
     A = []
     b = []
     
@@ -75,12 +67,10 @@ def trilaterate2D_least_squares(distances):
             np.dot(pi, pi) -
             np.dot(p1, p1)
         )
-    
+
     A = np.array(A)
     b = np.array(b)
-    
     x, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
-    
     return x
 
 # parse distance received via regex, only taking registered anchors, and apply exponential smoothing
@@ -108,22 +98,34 @@ def dict_to_array(tag_data):
     return pts
 
 
+def read_serial_trilaterate(on_position=None):
+    ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+    while True:
+        line = ser.readline().decode(errors='ignore').strip()
+        if not line:
+            continue
 
-ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
-while True:
-    line = ser.readline().decode(errors='ignore').strip()
-    if not line:
-        continue
+        parse_distances(line)
+        pts = dict_to_array(tag_data)
 
-    parse_distances(line)
-    pts = dict_to_array(tag_data)
+        if (two_dimensional and len(pts) >= 3):
+            pts2d = [[p[0], p[1], p[3]] for p in pts]
+            pos = trilaterate2D_least_squares(pts2d)
+            print("2D Position:", pos)
+        elif len(pts) >= 4:
+            pos = trilaterate3D_least_squares(pts[:4])
+            print("3D Position:", pos)
+        
+        if pos is not None:
+            if on_position:
+                on_position(pos)
 
-    if (two_dimensional and len(pts) >= 3):
-        pts2d = [[p[0], p[1], p[3]] for p in pts]
-        pos = trilaterate2D_least_squares(pts2d)
-        print("2D Position:", pos)
-    elif len(pts) >= 4:
-        pos = trilaterate3D_least_squares(pts[:4])
-        print("3D Position:", pos)
+def start_trilateration(on_position):
+    thread = threading.Thread(
+        target=read_serial_trilaterate,
+        args=(on_position,),
+        daemon=True
+    )
+    thread.start()
 
         
