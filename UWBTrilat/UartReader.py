@@ -79,18 +79,18 @@ def parse_distances(line):
     pattern = r"(0x[0-9A-Fa-f]+):=(\d+)"
     matches = re.findall(pattern, line)
 
-    for anchor_id, dist in matches:
-        if anchor_id in tag_data:
-            if tag_data[anchor_id][3] != -1:
-                tag_data[anchor_id][3] = int(dist) * smoothing_alpha + (1-smoothing_alpha) * tag_data[anchor_id][3]
+    for anchor, dist in matches:
+        if anchor in tag_data:
+            if tag_data[anchor][3] != -1:
+                tag_data[anchor][3] = int(dist) * smoothing_alpha + (1-smoothing_alpha) * tag_data[anchor][3]
             else:
-                tag_data[anchor_id][3] = int(dist)
+                tag_data[anchor][3] = int(dist)
 
 
 def dict_to_array(tag_data):
     pts = []
 
-    for anchor_id, values in tag_data.items():
+    for anchor, values in tag_data.items():
         # only include valid distances, cannot be directly on top of
         if values[3] > 0: 
             pts.append(values)
@@ -107,6 +107,7 @@ def read_serial_trilaterate(on_position=None):
 
         parse_distances(line)
         pts = dict_to_array(tag_data)
+        pos = None
 
         if (two_dimensional and len(pts) >= 3):
             pts2d = [[p[0], p[1], p[3]] for p in pts]
