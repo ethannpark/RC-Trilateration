@@ -1,14 +1,18 @@
 from flask import Flask, Response, render_template_string, request, jsonify
 import cv2
+import threading
+
+from UWBTrilat.UartReader import start_trilateration
 
 app = Flask(__name__)
-
-#camera = cv2.VideoCapture(0, cv2.CAP_DSHOW) is a windows specific setup that uses its OS to create
-#a reliable connection between the camera and PC. The second argument cannot be used on the pi
 
 camera = cv2.VideoCapture(0)
 camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+current_direction = "stop"
+latest_position = None
+position_lock = threading.Lock()
 
 HTML = """
 <!DOCTYPE html>
@@ -53,6 +57,11 @@ HTML = """
             border-radius: 8px;
             background: #222;
         }
+        .position {
+            margin-top: 1rem;
+            font-size: 1rem;
+            color: #9ad;
+        }
     </style>
 </head>
 <body>
@@ -62,6 +71,10 @@ HTML = """
 
         <div class="status">
             Current command: <span id="command">stop</span>
+        </div>
+
+        <div class="position">
+            Current position: <span id="position">waiting...</span>
         </div>
 
         <div class="controls">
@@ -96,7 +109,7 @@ HTML = """
             lastDirectionSent = direction;
             document.getElementById("command").textContent = direction;
 
-            try {   
+            try {
                 const response = await fetch("/move", {
                     method: "POST",
                     headers: {
@@ -111,7 +124,23 @@ HTML = """
                 console.error("Failed to send direction:", error);
             }
         }
-    
+
+        async function updatePosition() {
+            try {
+                const response = await fetch("/position");
+                const data = await response.json();
+
+                if (data.status === "ok" && data.position) {
+                    document.getElementById("position").textContent =
+                        `x=${data.position[0].toFixed(2)}, y=${data.position[1].toFixed(2)}`;
+                } else {
+                    document.getElementById("position").textContent = "waiting...";
+                }
+            } catch (error) {
+                console.error("Failed to fetch position:", error);
+            }
+        }
+
         document.addEventListener("keydown", (event) => {
             const key = event.key.toLowerCase();
 
@@ -136,10 +165,19 @@ HTML = """
             activeKeys.clear();
             sendDirection("stop");
         });
+
+        setInterval(updatePosition, 500);
+        updatePosition();
     </script>
 </body>
 </html>
 """
+
+def get_position(pos):
+    global latest_position
+    with position_lock:
+        latest_position = pos.tolist() if hasattr(pos, "tolist") else pos
+    print("Updated position:", latest_position)
 
 def generate_frames():
     while True:
@@ -177,8 +215,6 @@ def move():
         return jsonify({"status": "error", "message": "Missing direction"}), 400
 
     direction = data["command"]
-
-    #"Stop" is when no key is being pressed
     valid_commands = {"forward", "backward", "left", "right", "stop"}
 
     if direction not in valid_commands:
@@ -187,8 +223,15 @@ def move():
     current_direction = direction
     print(f"Received direction: {direction}")
 
-    #Sends command to raspberry pi (important to control the motors)
     return jsonify({"status": "ok", "command": direction})
 
+@app.route("/position")
+def position():
+    with position_lock:
+        if latest_position is None:
+            return jsonify({"status": "waiting", "position": None})
+        return jsonify({"status": "ok", "position": latest_position})
+
 if __name__ == "__main__":
+    start_trilateration(get_position)
     app.run(host="0.0.0.0", port=5001, debug=False)
