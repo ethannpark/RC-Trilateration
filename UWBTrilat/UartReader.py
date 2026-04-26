@@ -22,6 +22,7 @@ tag_data = {
     "0x488f": [0,0,0,-1],
     "0x0924": [0,0,0,-1]
 }
+serial_port = '/dev/ttyUSB0'
 
 smoothing_alpha = .35
 
@@ -99,7 +100,7 @@ def dict_to_array(tag_data):
 
 
 def read_serial_trilaterate(on_position=None):
-    ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+    ser = serial.Serial(serial_port, 115200, timeout=1)
     while True:
         line = ser.readline().decode(errors='ignore').strip()
         if not line:
